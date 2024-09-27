@@ -47,7 +47,7 @@ resource "aws_iam_role_policy_attachment" "dms-vpc-role-AmazonDMSVPCManagementRo
 }
 
 # Create a new replication instance
-resource "aws_dms_replication_instance" "test" {
+resource "aws_dms_replication_instance" "terraformtest" {
   allocated_storage            = 20
   apply_immediately            = true
   auto_minor_version_upgrade   = true
