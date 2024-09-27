@@ -1,101 +1,77 @@
-module "database_migration_service" {
-  source  = "terraform-aws-modules/dms/aws"
-  version = "~> 2.0"
+# Database Migration Service requires the below IAM Roles to be created before
+# replication instances can be created. See the DMS Documentation for
+# additional information: https://docs.aws.amazon.com/dms/latest/userguide/security-iam.html#CHAP_Security.APIRole
+#  * dms-vpc-role
+#  * dms-cloudwatch-logs-role
+#  * dms-access-for-endpoint
 
-  # Subnet group
-  repl_subnet_group_name        = "example"
-  repl_subnet_group_description = "DMS Subnet group"
-  repl_subnet_group_subnet_ids  = ["subnet-1fe3d837", "subnet-129d66ab", "subnet-1211eef5"]
+data "aws_iam_policy_document" "dms_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
 
-  # Instance
-  repl_instance_allocated_storage            = 64
-  repl_instance_auto_minor_version_upgrade   = true
-  repl_instance_allow_major_version_upgrade  = true
-  repl_instance_apply_immediately            = true
-  repl_instance_engine_version               = "3.5.2"
-  repl_instance_multi_az                     = true
-  repl_instance_preferred_maintenance_window = "sun:10:30-sun:14:30"
-  repl_instance_publicly_accessible          = false
-  repl_instance_class                        = "dms.t3.large"
-  repl_instance_id                           = "example"
-  repl_instance_vpc_security_group_ids       = ["sg-12345678"]
-
-  endpoints = {
-    source = {
-      database_name               = "example"
-      endpoint_id                 = "example-source"
-      endpoint_type               = "source"
-      engine_name                 = "aurora-postgresql"
-      extra_connection_attributes = "heartbeatFrequency=1;"
-      username                    = "postgresqlUser"
-      password                    = "youShouldPickABetterPassword123!"
-      port                        = 5432
-      server_name                 = "dms-ex-src.cluster-abcdefghijkl.us-east-1.rds.amazonaws.com"
-      ssl_mode                    = "none"
-      tags                        = { EndpointType = "source" }
-    }
-
-    destination = {
-      database_name = "example"
-      endpoint_id   = "example-destination"
-      endpoint_type = "target"
-      engine_name   = "aurora"
-      username      = "mysqlUser"
-      password      = "passwordsDoNotNeedToMatch789?"
-      port          = 3306
-      server_name   = "dms-ex-dest.cluster-abcdefghijkl.us-east-1.rds.amazonaws.com"
-      ssl_mode      = "none"
-      tags          = { EndpointType = "destination" }
+    principals {
+      identifiers = ["dms.amazonaws.com"]
+      type        = "Service"
     }
   }
+}
 
-  replication_tasks = {
-    cdc_ex = {
-      replication_task_id       = "example-cdc"
-      migration_type            = "cdc"
-      replication_task_settings = file("task_settings.json")
-      table_mappings            = file("table_mappings.json")
-      source_endpoint_key       = "source"
-      target_endpoint_key       = "destination"
-      tags                      = { Task = "PostgreSQL-to-MySQL" }
-    }
-  }
+resource "aws_iam_role" "dms-access-for-endpoint" {
+  assume_role_policy = data.aws_iam_policy_document.dms_assume_role.json
+  name               = "dms-access-for-endpoint"
+}
 
-  event_subscriptions = {
-    instance = {
-      name                             = "instance-events"
-      enabled                          = true
-      instance_event_subscription_keys = ["example"]
-      source_type                      = "replication-instance"
-      sns_topic_arn                    = "arn:aws:sns:us-east-1:012345678910:example-topic"
-      event_categories                 = [
-        "failure",
-        "creation",
-        "deletion",
-        "maintenance",
-        "failover",
-        "low storage",
-        "configuration change"
-      ]
-    }
-    task = {
-      name                         = "task-events"
-      enabled                      = true
-      task_event_subscription_keys = ["cdc_ex"]
-      source_type                  = "replication-task"
-      sns_topic_arn                = "arn:aws:sns:us-east-1:012345678910:example-topic"
-      event_categories             = [
-        "failure",
-        "state change",
-        "creation",
-        "deletion",
-        "configuration change"
-      ]
-    }
-  }
+resource "aws_iam_role_policy_attachment" "dms-access-for-endpoint-AmazonDMSRedshiftS3Role" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonDMSRedshiftS3Role"
+  role       = aws_iam_role.dms-access-for-endpoint.name
+}
+
+resource "aws_iam_role" "dms-cloudwatch-logs-role" {
+  assume_role_policy = data.aws_iam_policy_document.dms_assume_role.json
+  name               = "dms-cloudwatch-logs-role"
+}
+
+resource "aws_iam_role_policy_attachment" "dms-cloudwatch-logs-role-AmazonDMSCloudWatchLogsRole" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole"
+  role       = aws_iam_role.dms-cloudwatch-logs-role.name
+}
+
+resource "aws_iam_role" "dms-vpc-role" {
+  assume_role_policy = data.aws_iam_policy_document.dms_assume_role.json
+  name               = "dms-vpc-role"
+}
+
+resource "aws_iam_role_policy_attachment" "dms-vpc-role-AmazonDMSVPCManagementRole" {
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
+  role       = aws_iam_role.dms-vpc-role.name
+}
+
+# Create a new replication instance
+resource "aws_dms_replication_instance" "test" {
+  allocated_storage            = 20
+  apply_immediately            = true
+  auto_minor_version_upgrade   = true
+  availability_zone            = "us-west-2c"
+  engine_version               = "3.1.4"
+  kms_key_arn                  = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  multi_az                     = false
+  preferred_maintenance_window = "sun:10:30-sun:14:30"
+  publicly_accessible          = true
+  replication_instance_class   = "dms.t2.micro"
+  replication_instance_id      = "test-dms-replication-instance-tf"
+  replication_subnet_group_id  = aws_dms_replication_subnet_group.test-dms-replication-subnet-group-tf.id
 
   tags = {
-    Terraform   = "true"
-    Environment = "dev"
+    Name = "test"
   }
+
+  vpc_security_group_ids = [
+    "sg-12345678",
+  ]
+
+  depends_on = [
+    aws_iam_role_policy_attachment.dms-access-for-endpoint-AmazonDMSRedshiftS3Role,
+    aws_iam_role_policy_attachment.dms-cloudwatch-logs-role-AmazonDMSCloudWatchLogsRole,
+    aws_iam_role_policy_attachment.dms-vpc-role-AmazonDMSVPCManagementRole
+  ]
 }
