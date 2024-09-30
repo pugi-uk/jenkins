@@ -50,6 +50,22 @@ resource "aws_iam_role_policy_attachment" "dms-vpc-role-AmazonDMSVPCManagementRo
   role       = aws_iam_role.dms-vpc-role.name
 }
 
+resource "aws_dms_replication_subnet_group" "terratest" {
+  replication_subnet_group_description = "Example"
+  replication_subnet_group_id          = "example-id"
+
+  subnet_ids = [
+    "subnet-0fd39e83975d62316",
+    "subnet-03750840b33e0ff09",
+  ]
+
+  tags = {
+    Name = "terraform sub group"
+  }
+
+  depends_on = [aws_iam_role_policy_attachment.dms-vpc-role-AmazonDMSVPCManagementRole]
+}
+
 # Create a new replication instance
 resource "aws_dms_replication_instance" "terraformtest" {
   allocated_storage            = 20
@@ -63,7 +79,7 @@ resource "aws_dms_replication_instance" "terraformtest" {
   publicly_accessible          = true
   replication_instance_class   = "dms.t2.micro"
   replication_instance_id      = "test-dms-replication-instance-tf"
-  replication_subnet_group_id  = aws_dms_replication_subnet_group.test-dms-replication-subnet-group-tf.id
+  replication_subnet_group_id  = aws_dms_replication_subnet_group.terratest.id
 
   tags = {
     Name = "test"
