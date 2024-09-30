@@ -71,9 +71,9 @@ resource "aws_dms_replication_instance" "terraformtest" {
   allocated_storage            = 20
   apply_immediately            = true
   auto_minor_version_upgrade   = true
-  availability_zone            = "us-west-2c"
-  engine_version               = "3.1.4"
-  kms_key_arn                  = "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012"
+  availability_zone            = "eu-west-2a"
+  engine_version               = "3.5.2"
+  kms_key_arn                  = "arn:aws:kms:eu-west-2:471112602682:key/475f9f0d-83f2-4255-aeae-6e7b7b75010a"
   multi_az                     = false
   preferred_maintenance_window = "sun:10:30-sun:14:30"
   publicly_accessible          = true
