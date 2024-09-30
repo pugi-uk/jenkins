@@ -40,14 +40,14 @@ resource "aws_iam_role_policy_attachment" "dms-cloudwatch-logs-role-AmazonDMSClo
   role       = aws_iam_role.dms-cloudwatch-logs-role.name
 }
 
-resource "aws_iam_role" "dms-vpc-role" {
+resource "aws_iam_role" "dms-vpc-role2" {
   assume_role_policy = data.aws_iam_policy_document.dms_assume_role.json
   name               = "dms-vpc-role2"
 }
 
 resource "aws_iam_role_policy_attachment" "dms-vpc-role-AmazonDMSVPCManagementRole" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole"
-  role       = aws_iam_role.dms-vpc-role.name
+  role       = aws_iam_role.dms-vpc-role2.name
 }
 
 resource "aws_dms_replication_subnet_group" "terratest" {
