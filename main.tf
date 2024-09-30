@@ -86,7 +86,7 @@ resource "aws_dms_replication_instance" "terraformtest" {
   }
 
   vpc_security_group_ids = [
-    "sg-12345678",
+    "sg-01f158d6fee6d5506",
   ]
 
   depends_on = [
