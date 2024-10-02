@@ -1,0 +1,98 @@
+@Library("jenkins-functions@v0.3.0") _
+
+def env_name
+def bill_of_materials
+def subnet
+def bill_of_materials
+def infra_version
+def ap_list
+
+pipeline {
+    agent {
+        label "Build Pipeline"
+    }
+    parameters {
+        choice(name: 'ACTION', choices['DEPLOY', 'DESTROY'])
+    }
+    stages {
+        stage ("Prep") {
+            steps {
+                script {
+                    configureGit()
+                    terraform.Download()
+
+                    env_name = envDeploy.GetEnvName(env.BRANCH_NAME)
+                    vpc_name = envDeploy.GetVPCName(env_name)
+                    subnet = envDeploy.GetSubnet(env_name)
+
+                    bill_of_materials = envDeploy.ReadBillOfMaterials()
+                    infra_version = envDeploy.GetInfraVersion(bill_of_materials)
+                    app_list = envDeploy.GetAppList(bill_of_materials)
+                }
+            }
+        }
+        stage ("Deploy") {
+            when {
+                expression = {return params.ACTION == "DEPLOY"}
+            }
+            steps {
+                script {
+                    if (subnet == null) {
+                        subnet = envDeploy.AllocateSubnet(env_name)
+                        envDeploy.AddVaultPolicy(env_name)
+                    }
+                    envDeploy.UpdateMetaData(env_name: env_name, bom: bill_of_materials, subnet: subnet, vpc_name: vpc_name, status: "DEPLOYING")
+                    stage("Deploy infrastructure:${infra_version}") {
+                        echo "Deploy $P{env_name} infrastructure..."
+                        envDeploy.DeployInfra(infra_version, env_name, subnet, vpc_name, params.ACTION)
+                    }
+                    for(app in app_list) {
+                        stage("Deploy ${app["repo"]}:${app["version"]}") {
+                            echo "Deploy ${app["repo"]}:${app["version]} to ${env_name}"
+                            envDeploy.DeployApp(app, env_name, vpc_name, params.ACTION)
+                        }
+                    }
+                    envDeploy.UpdateMetaData(env_name: env_name, bom: bill_of_materials, subnet: subnet, vpc_name: vpc_name, status: "DEPLOYED")
+                }
+            }
+        }
+        stage ("Destroy") {
+            when {
+                expression {return params.ACTION == "DESTROY"}
+            
+            steps {
+                script {
+                    stage("Confirm") {
+                        timeout(time: 1), unit: 'MINUTES') {
+                            input(id: "Destroy", message: "Confirm deletion of $env:name", ok: 'Destroy')
+                        }
+                    }
+                    envDeploy.UpdateMetaData(env_name: env_name, bom: bill_of_materials, subnet: subnet, vpc_name: vpc_name, status: "DESTROYING")
+                    for(app in app_list.reverse()) {
+                        stage("Destroy ${app["repo"]}:${app["version"]}") {
+                            echo "Destroy ${app["repo"]}:${app["version]} to ${env_name}"
+                            envDeploy.DeployApp(app, env_name, vpc_name, params.ACTION)
+                        }
+                    }
+                    stage("Destroy infrastructure:${infra_version}") {
+                        echo "Destroy ${env_name} infra..."
+                        envDeploy.DeployInfra(infra_version, env_name, subnet, vpc_name, params.ACTION)
+                    }
+                    envDeploy.DeallocateSubnet(subnet)
+                    envDeploy.DelVaultPolicy(env_name)
+                    envDeploy.UpdateMetaData(env_name: env_name, bom: bill_of_materials, subnet: subnet, vpc_name: vpc_name, status: "DESTROYED")
+                }
+            }}
+        }
+    }
+    post {
+        always {
+            cleanWs()
+        }
+        failure {
+            script {
+                envDeploy.UpdateMetaData(env_name: env_name, bom: bill_of_materials, subnet: subnet, vpc_name: vpc_name, status: "FAILED")
+            }
+        }
+    }
+}
