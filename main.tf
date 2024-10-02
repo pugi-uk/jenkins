@@ -9,17 +9,6 @@ provider "aws" {
   region = "eu-west-2"
 }
 
-data "aws_iam_policy_document" "dms_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-
-    principals {
-      identifiers = ["dms.amazonaws.com"]
-      type        = "Service"
-    }
-  }
-}
-
 resource "aws_iam_role" "dms-access-for-endpoint" {
   assume_role_policy = data.aws_iam_policy_document.dms_assume_role.json
   name               = "dms-access-for-endpoint"
@@ -40,9 +29,9 @@ resource "aws_iam_role_policy_attachment" "dms-cloudwatch-logs-role-AmazonDMSClo
   role       = aws_iam_role.dms-cloudwatch-logs-role.name
 }
 
-resource "aws_iam_role" "dms-vpc-role2" {
+resource "aws_iam_role" "dms-vpc-role" {
   assume_role_policy = data.aws_iam_policy_document.dms_assume_role.json
-  name               = "dms-vpc-role2"
+  name               = "${local.name}-role"ß
 }
 
 resource "aws_iam_role_policy_attachment" "dms-vpc-role-AmazonDMSVPCManagementRole" {
